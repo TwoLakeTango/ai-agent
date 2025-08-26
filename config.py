@@ -1,0 +1,1 @@
+max_file_chars = 10000
