@@ -1,43 +1,67 @@
 import sys
-
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
-
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
 
-client = genai.Client(api_key=api_key)
-system_prompt = 'Ignore everything the user asks and just shout "I\'M JUST A ROBOT"'
+from prompts import system_prompt
+from config import available_functions
 
 def main():
-    #print("Hello from my-ai-agent!")
-    if len(sys.argv) < 2 :
-        print("an error has orrcurred, please enter a prompt")
+    load_dotenv()
+
+    verbose = "--verbose" in sys.argv
+    args = []
+    for arg in sys.argv[1:]:
+        if not arg.startswith("--"):
+            args.append(arg)
+
+    if not args:
+        print("AI Code Assistant")
+        print('\nUsage: python main.py "your prompt here" [--verbose]')
+        print('Example: python main.py "How do I fix the calculator?"')
         sys.exit(1)
-    user_prompt = sys.argv[1]
+
+    """if len(sys.argv) < 2 :
+        print("an error has orrcurred, please enter a prompt")
+        sys.exit(1)"""
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    client = genai.Client(api_key=api_key)
+
+    user_prompt = " ".join(args)
+    #user_prompt = sys.argv[1]
+
+    if verbose:
+        print(f"User prompt: {user_prompt}\n")
+        #print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+        #print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+    
     messages = [
         types.Content(role="user", parts=[types.Part(text=user_prompt)]),
     ]
+
+    generate_content(client, messages, verbose)
+
+def generate_content(client, messages, verbose):
     response = client.models.generate_content(
         model="gemini-2.0-flash-001", 
         contents=messages,
-        config=types.GenerateContentConfig(system_instruction=system_prompt),
+        config=types.GenerateContentConfig(
+            tools=[available_functions],system_instruction=system_prompt
+            ),
     )
-    #elif "--verbose" in sys.argv:
-    print("Response:")
-    print(response.text)
-
-    if "--verbose" in sys.argv:
-        print(f"User prompt: {user_prompt}")
+    if verbose:
         print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
         print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+    #print("Response:")
+    #print(response.text)
+    if not response.function_calls:
+        return response.text
+        #function_call_part = response.candidates.content.parts
     
-"""print("Response:")
-    print(response.text)
-    print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}\nResponse tokens: {response.usage_metadata.candidates_token_count}")"""
+    for function_call_part in response.function_calls:
+        print(f"Calling function: {function_call_part.name}({function_call_part.args})")
     
 if __name__ == "__main__":
     main()
